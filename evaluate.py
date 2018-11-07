@@ -28,7 +28,7 @@ if use_cuda:
 else:
     print('Using CPU')
 
-from data import data_transforms
+from tools.data import data_transforms
 
 test_dir = args.data + '/test_images/mistery_category'
 

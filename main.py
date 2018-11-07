@@ -1,10 +1,10 @@
 import os
+from datetime import datetime
 import torch
 import torch.optim as optim
 from torchvision import datasets
-from models import SimpleCNN
-from tools import Parser
-from data import data_transforms
+from tools import Parser, data_transforms
+from models import SimpleCNN as Net
 
 # Training settings
 args = Parser().parse()
@@ -29,7 +29,7 @@ val_loader = torch.utils.data.DataLoader(
 # Neural network and optimizer
 # We define neural net in cnn.py so that it can be reused by the evaluate.py script
 
-model = SimpleCNN()
+model = Net()
 if use_cuda:
     print('Using GPU')
     model.cuda()
@@ -77,10 +77,12 @@ def validation():
         100. * correct / len(val_loader.dataset)))
 
 
+path = args.experiment + '/' + datetime.today().strftime('%Y-%m-%d %H:%M:%S')
+os.mkdir(path)
 for epoch in range(1, args.epochs + 1):
     train(epoch)
     validation()
-    model_file = args.experiment + '/model.pth'
+    model_file = path + '/model.pth'
     torch.save(model.state_dict(), model_file)
     print(
         '\nSaved model to ' + model_file + '. You can run `python evaluate.py --model ' + model_file +
