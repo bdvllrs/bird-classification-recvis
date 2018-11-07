@@ -3,8 +3,10 @@ from datetime import datetime
 import torch
 import torch.optim as optim
 from torchvision import datasets
-from tools import Parser, data_transforms
+from torchvision.models import resnet18
+from tools import Parser, data_transformer
 from models import SimpleCNN as Net
+import gc
 
 # Training settings
 args = Parser().parse()
@@ -16,6 +18,7 @@ if not os.path.isdir(args.experiment):
     os.makedirs(args.experiment)
 
 # Data initialization and loading
+data_transforms = data_transformer((224, 224))
 
 train_loader = torch.utils.data.DataLoader(
     datasets.ImageFolder(args.data + '/train_images',
@@ -29,7 +32,7 @@ val_loader = torch.utils.data.DataLoader(
 # Neural network and optimizer
 # We define neural net in cnn.py so that it can be reused by the evaluate.py script
 
-model = Net()
+model = resnet18(num_classes=20)
 if use_cuda:
     print('Using GPU')
     model.cuda()
@@ -42,6 +45,7 @@ optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 def train(epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
+        gc.collect()
         if use_cuda:
             data, target = data.cuda(), target.cuda()
         optimizer.zero_grad()
