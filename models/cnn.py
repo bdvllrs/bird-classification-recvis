@@ -1,12 +1,12 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-nclasses = 20 
+nclasses = 20
 
-class Net(nn.Module):
+
+class SimpleCNN(nn.Module):
     def __init__(self):
-        super(Net, self).__init__()
+        super(SimpleCNN, self).__init__()
         self.conv1 = nn.Conv2d(3, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.conv3 = nn.Conv2d(20, 20, kernel_size=5)
