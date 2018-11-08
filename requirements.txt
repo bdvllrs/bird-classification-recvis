@@ -1,3 +1,6 @@
+matplotlib
+numpy
 torch
+Augmentor
 torchvision
 tqdm

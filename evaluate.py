@@ -2,10 +2,9 @@ import argparse
 from tqdm import tqdm
 import os
 import PIL.Image as Image
-
+from models import resnet101
 import torch
-
-from models.cnn import SimpleCNN
+from tools import data_transformer
 
 parser = argparse.ArgumentParser(description='RecVis A3 evaluation script')
 parser.add_argument('--data', type=str, default='bird_dataset', metavar='D',
@@ -19,7 +18,7 @@ args = parser.parse_args()
 use_cuda = torch.cuda.is_available()
 
 state_dict = torch.load(args.model)
-model = SimpleCNN()
+model, input_size = resnet101()
 model.load_state_dict(state_dict)
 model.eval()
 if use_cuda:
@@ -28,9 +27,10 @@ if use_cuda:
 else:
     print('Using CPU')
 
-from tools.data import data_transforms
+data_transforms = data_transformer(input_size)
 
 test_dir = args.data + '/test_images/mistery_category'
+
 
 def pil_loader(path):
     # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
@@ -54,6 +54,3 @@ for f in tqdm(os.listdir(test_dir)):
 output_file.close()
 
 print("Succesfully wrote " + args.outfile + ', you can upload this file to the kaggle competition website')
-        
-
-

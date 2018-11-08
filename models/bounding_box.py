@@ -1,13 +1,13 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import alexnet as torch_alexnet, resnet101 as torch_resnet101
+from torchvision.models import resnet101 as torch_resnet101, alexnet as torch_alexnet
 
-nclasses = 20
+nclasses = 4
 
 
-class SimpleCNN(nn.Module):
+class BoundingBoxSimple(nn.Module):
     def __init__(self):
-        super(SimpleCNN, self).__init__()
+        super(BoundingBoxSimple, self).__init__()
         self.conv1 = nn.Conv2d(3, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
         self.conv3 = nn.Conv2d(20, 20, kernel_size=5)
@@ -23,11 +23,20 @@ class SimpleCNN(nn.Module):
         return self.fc2(x)
 
 
-def simple_cnn():
-    return SimpleCNN(), (64, 64)
+def bounding_box():
+    return BoundingBoxSimple(), (64, 64)
 
 
-def alexnet():
+def bbresnet101():
+    model = torch_resnet101(pretrained=True)
+    for param in model.parameters():
+        param.requires_grad = False
+    fc_features = model.fc.in_features
+    model.fc = nn.Linear(fc_features, nclasses)
+    return model, (224, 224)
+
+
+def bbalexnet():
     model = torch_alexnet(pretrained=True)
     for param in model.parameters():
         param.requires_grad = False
@@ -41,13 +50,3 @@ def alexnet():
         nn.Linear(4096, nclasses),
     )
     return model, (227, 227)
-
-
-def resnet101():
-    model = torch_resnet101(pretrained=True)
-    for param in model.parameters():
-        param.requires_grad = False
-    fc_features = model.fc.in_features
-    model.fc = nn.Linear(fc_features, nclasses)
-    return model, (224, 224)
-
