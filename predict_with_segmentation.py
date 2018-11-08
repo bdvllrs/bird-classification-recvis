@@ -1,17 +1,14 @@
 import os
 from datetime import datetime
-import numpy as np
-
-import matplotlib.patches as patches
-import matplotlib.pyplot as plt
 import torch
 import torch.optim as optim
+from torchvision import datasets
+from tools import Parser, data_transformer_with_segmentation
+from models import bounding_box
+from models import simple_cnn, alexnet, resnet101
 
-from models import bounding_box, bbalexnet
-from tools import Parser, data_transformer, SegmentationDataLoader, JacardLoss
-from tools.visualisation import show_images, show_bounding_box
 
-model, input_size = bounding_box()
+model, input_size = resnet101()
 
 # Training settings
 args = Parser().parse()
@@ -25,18 +22,21 @@ if not os.path.isdir(args.experiment):
 path_to_images = os.path.abspath(os.path.join(os.curdir, 'bird_dataset', 'train_images'))
 
 # Data initialization and loading
-data_transforms = data_transformer(input_size)
+data_transforms = data_transformer_with_segmentation(input_size, bounding_box(), model_path='experiment/bb-v1/model.pth')
 
 train_loader = torch.utils.data.DataLoader(
-    # Get the original image and set target as bounding box over segmentation
-    SegmentationDataLoader(args.data + '/segmentations/train_images',
-                           transform=data_transforms),
+    datasets.ImageFolder(args.data + '/train_images',
+                         transform=data_transforms),
     batch_size=args.batch_size, shuffle=True, num_workers=1)
 val_loader = torch.utils.data.DataLoader(
-    SegmentationDataLoader(args.data + '/segmentations/val_images',
-                           transform=data_transforms),
+    datasets.ImageFolder(args.data + '/val_images',
+                         transform=data_transforms),
     batch_size=args.batch_size, shuffle=False, num_workers=1)
 
+# Neural network and optimizer
+# We define neural net in cnn.py so that it can be reused by the evaluate.py script
+
+# model = SimpleCNN()
 if use_cuda:
     print('Using GPU')
     model.cuda()
@@ -53,7 +53,7 @@ def train(epoch):
             data, target = data.cuda(), target.cuda()
         optimizer.zero_grad()
         output = model(data)
-        criterion = JacardLoss()
+        criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -63,35 +63,32 @@ def train(epoch):
                        100. * batch_idx / len(train_loader), loss.data.item()))
 
 
-def validation(epoch):
+def validation():
     model.eval()
     validation_loss = 0
+    correct = 0
     for data, target in val_loader:
         if use_cuda:
             data, target = data.cuda(), target.cuda()
         output = model(data)
-        if epoch % 10 == 0:
-            i = np.random.randint(0, len(output))
-            fig, ax = plt.subplots(1)
-            show_images(data, 3, min=i, max=i + 1, ax=ax)
-            show_bounding_box(output[i], input_size, ax, color='r')
-            show_bounding_box(target[i], input_size, ax, color='b')
-            fig.show()
         # sum up batch loss
-        # criterion = torch.nn.MSELoss(reduction='elementwise_mean')
-        criterion = JacardLoss()
+        criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
         validation_loss += criterion(output, target).data.item()
+        # get the index of the max log-probability
+        pred = output.data.max(1, keepdim=True)[1]
+        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
 
     validation_loss /= len(val_loader.dataset)
-    print('\nValidation set: Average loss: %%{:.6f})\n'.format(
-        validation_loss))
+    print('\nValidation set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        validation_loss, correct, len(val_loader.dataset),
+        100. * correct / len(val_loader.dataset)))
 
 
 path = args.experiment + '/' + datetime.today().strftime('%Y-%m-%d %H:%M:%S')
 os.mkdir(path)
 for epoch in range(1, args.epochs + 1):
     train(epoch)
-    validation(epoch)
+    validation()
     model_file = path + '/model.pth'
     torch.save(model.state_dict(), model_file)
     print(

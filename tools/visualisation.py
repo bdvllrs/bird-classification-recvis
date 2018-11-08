@@ -28,3 +28,9 @@ def show_bounding_box(bbox, input_size, ax, color='r'):
     # Add the patch to the Axes
     ax.add_patch(rect)
 
+
+def plot_error(k, new_point, fig, ax):
+    ax.plot(k, new_point)
+    fig.canvas.draw()
+    fig.canvas.flush_events()
+

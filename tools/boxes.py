@@ -15,10 +15,18 @@ def intersect(box_a, box_b):
     Return:
       (tensor) intersection area, Shape: [A,B].
     """
-    max_x1 = torch.max(box_a[:, 0], box_b[:, 0])
-    min_x2 = torch.min(box_a[:, 1], box_b[:, 1])
-    max_y1 = torch.max(box_a[:, 2], box_b[:, 2])
-    min_y2 = torch.min(box_a[:, 3], box_b[:, 3])
+    left_x_a = torch.min(box_a[:, 0], box_a[:, 1])
+    right_x_a = torch.max(box_a[:, 0], box_a[:, 1])
+    left_y_a = torch.min(box_a[:, 2], box_a[:, 3])
+    right_y_a = torch.max(box_a[:, 3], box_a[:, 3])
+    left_x_b = torch.min(box_b[:, 0], box_b[:, 1])
+    right_x_b = torch.max(box_b[:, 0], box_b[:, 1])
+    left_y_b = torch.min(box_b[:, 2], box_b[:, 3])
+    right_y_b = torch.max(box_b[:, 3], box_b[:, 3])
+    max_x1 = torch.max(left_x_a, left_x_b)
+    min_x2 = torch.min(right_x_a, right_x_b)
+    max_y1 = torch.max(left_y_a, left_y_b)
+    min_y2 = torch.min(right_y_a, right_y_b)
     inter = torch.clamp((min_x2 - max_x1), min=0) * torch.clamp((min_y2 - max_y1), min=0)
     return inter
 
@@ -37,18 +45,18 @@ def jaccard(box_a, box_b, smooth=1):
         jaccard overlap: (tensor) Shape: [box_a.size(0), box_b.size(0)]
     """
     inter = intersect(box_a, box_b)
-    area_a = ((box_a[:, 1] - box_a[:, 0]) *
-              (box_a[:, 3] - box_a[:, 2]))
-    area_b = ((box_b[:, 1] - box_b[:, 0]) *
-              (box_b[:, 3] - box_b[:, 2]))
+    area_a = (torch.abs(box_a[:, 1] - box_a[:, 0]) *
+              torch.abs(box_a[:, 3] - box_a[:, 2]))
+    area_b = (torch.abs(box_b[:, 1] - box_b[:, 0]) *
+              torch.abs(box_b[:, 3] - box_b[:, 2]))
     union = area_a + area_b - inter + smooth
-    return (inter + smooth) / union  # [A,B]
+    return (inter + smooth) / union
 
 
 class JacardLoss(torch.nn.Module):
     def forward(self, bbox1, bbox2):
-        smooth = 10
-        return torch.sum((1 - jaccard(bbox1, bbox2, smooth)) * smooth)
+        smooth = 1
+        return (1 - torch.mean(jaccard(bbox1, bbox2, smooth))) * smooth
 
 
 def bounding_box(img):
