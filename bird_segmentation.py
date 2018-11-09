@@ -8,7 +8,7 @@ import torch
 import torch.optim as optim
 
 from models import bounding_box, bbalexnet
-from tools import Parser, data_transformer, SegmentationDataLoader, JacardLoss
+from tools import Parser, data_transformer_with_augment, SegmentationDataLoader, JacardLoss
 from tools.visualisation import show_images, show_bounding_box
 
 model, input_size = bounding_box()
@@ -25,16 +25,17 @@ if not os.path.isdir(args.experiment):
 path_to_images = os.path.abspath(os.path.join(os.curdir, 'bird_dataset', 'train_images'))
 
 # Data initialization and loading
-data_transforms = data_transformer(input_size)
+data_transforms_train = data_transformer_with_augment(input_size)
+data_transforms_val = data_transformer_with_augment(input_size)
 
 train_loader = torch.utils.data.DataLoader(
     # Get the original image and set target as bounding box over segmentation
     SegmentationDataLoader(args.data + '/segmentations/train_images',
-                           transform=data_transforms),
+                                      transform=data_transforms_train),
     batch_size=args.batch_size, shuffle=True, num_workers=1)
 val_loader = torch.utils.data.DataLoader(
     SegmentationDataLoader(args.data + '/segmentations/val_images',
-                           transform=data_transforms),
+                                      transform=data_transforms_val),
     batch_size=args.batch_size, shuffle=False, num_workers=1)
 
 if use_cuda:
@@ -70,7 +71,7 @@ def validation(epoch):
         if use_cuda:
             data, target = data.cuda(), target.cuda()
         output = model(data)
-        if epoch % 10 == 0:
+        if epoch % 2 == 0:
             i = np.random.randint(0, len(output))
             fig, ax = plt.subplots(1)
             show_images(data, 3, min=i, max=i + 1, ax=ax)
@@ -83,7 +84,7 @@ def validation(epoch):
         validation_loss += criterion(output, target).data.item()
 
     validation_loss /= len(val_loader.dataset)
-    print('\nValidation set: Average loss: %%{:.6f})\n'.format(
+    print('\nValidation set: Average loss: {})\n'.format(
         validation_loss))
 
 

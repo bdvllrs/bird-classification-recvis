@@ -4,8 +4,11 @@ import torch
 import torch.optim as optim
 from torchvision import datasets
 from tools import Parser, data_transformer_with_segmentation
+from tools.visualisation import show_images
 from models import bounding_box
 from models import simple_cnn, alexnet, resnet101
+
+import matplotlib.pyplot as plt
 
 
 model, input_size = resnet101()
@@ -51,6 +54,8 @@ def train(epoch):
     for batch_idx, (data, target) in enumerate(train_loader):
         if use_cuda:
             data, target = data.cuda(), target.cuda()
+        # show_images(data, 3, min=0, max=1)
+        # plt.show()
         optimizer.zero_grad()
         output = model(data)
         criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')

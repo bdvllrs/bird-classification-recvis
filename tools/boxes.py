@@ -90,3 +90,4 @@ class SegmentationDataLoader(ImageFolder):
             sample_seg = self.transform(sample_seg)
         target = torch_Tensor(bounding_box(sample_seg))
         return sample, target
+

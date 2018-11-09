@@ -22,8 +22,8 @@ def show_images(imgs, nrow=8, min=0, max=-1, ax=None):
 
 
 def show_bounding_box(bbox, input_size, ax, color='r'):
-    rect = patches.Rectangle((input_size[0] * bbox[2], input_size[1] * bbox[0]),
-                             input_size[0] * (bbox[3] - bbox[2]), input_size[1] * (bbox[1] - bbox[0]),
+    rect = patches.Rectangle((input_size[0] * bbox[0], input_size[1] * bbox[2]),
+                             input_size[1] * (bbox[3] - bbox[2]), input_size[0] * (bbox[1] - bbox[0]),
                              linewidth=1, edgecolor=color, facecolor='none')
     # Add the patch to the Axes
     ax.add_patch(rect)

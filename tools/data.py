@@ -37,6 +37,16 @@ def data_transformer(size, image_path=None):
     return transforms.Compose(transformations)
 
 
+def get_rectangle(bbox, input_size):
+    left = min(bbox[0], bbox[1])
+    right = max(bbox[0], bbox[1])
+    bottom = min(bbox[2], bbox[3])
+    top = max(bbox[3], bbox[3])
+    left_x, bottom_y = input_size[0] * left, input_size[1] * bottom
+    height, width = input_size[1] * (top - bottom), input_size[0] * (right - left)
+    return left_x, bottom_y, left_x + width, bottom_y + height
+
+
 class ResizeUsingBoudingBox(object):
     def __init__(self, model, model_path):
         state_dict = torch.load(model_path)
@@ -50,18 +60,30 @@ class ResizeUsingBoudingBox(object):
         vector_img = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                           std=[0.229, 0.224, 0.225])(vector_img).unsqueeze(0)
         vector_img.requires_grad = False
-        bbox = self.model(vector_img)[0]
-        left_x = floor(self.size[0] * float(torch.min(bbox[0], bbox[1]).detach().numpy()))
-        right_x = floor(self.size[0] * float(torch.max(bbox[0], bbox[1]).detach().numpy()))
-        left_y = floor(self.size[1] * float(torch.min(bbox[2], bbox[3]).detach().numpy()))
-        right_y = floor(self.size[1] * float(torch.max(bbox[3], bbox[3]).detach().numpy()))
-        return img.crop((left_x, left_y, right_x, right_y))
+        bbox = self.model(vector_img)[0].detach().numpy()
+        return img.crop(get_rectangle(bbox, img.size))
 
 
 def data_transformer_with_segmentation(size, model, model_path):
     return transforms.Compose([
         ResizeUsingBoudingBox(model, model_path),
         transforms.Resize(size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225])
+    ])
+
+
+def data_transformer_with_augment(input_size):
+    p = Augmentor.Pipeline()
+    p.rotate(probability=0.9, max_left_rotation=10, max_right_rotation=10)
+    p.shear(probability=0.6, max_shear_left=10, max_shear_right=10)
+    p.flip_random(probability=0.7)
+    p.random_distortion(probability=0.5, grid_height=16, grid_width=16, magnitude=10)
+    p.zoom_random(probability=0.7, percentage_area=0.8)
+    return transforms.Compose([
+        p.torch_transform(),
+        transforms.Resize(input_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])

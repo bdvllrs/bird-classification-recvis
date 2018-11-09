@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
+import torch
 from torchvision.models import resnet101 as torch_resnet101, alexnet as torch_alexnet
 
 nclasses = 4
@@ -20,7 +21,7 @@ class BoundingBoxSimple(nn.Module):
         x = F.relu(F.max_pool2d(self.conv3(x), 2))
         x = x.view(-1, 320)
         x = F.relu(self.fc1(x))
-        return F.sigmoid(self.fc2(x))
+        return torch.sigmoid(self.fc2(x))
 
 
 def bounding_box():
