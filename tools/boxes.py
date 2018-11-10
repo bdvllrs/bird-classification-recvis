@@ -80,6 +80,10 @@ def bounding_box(img):
 
 
 class SegmentationDataLoader(ImageFolder):
+    def __init__(self, root, bbox=True, **params):
+        super(SegmentationDataLoader).__init__(root, **params)
+        self.bbox = bbox
+
     def __getitem__(self, index):
         path, target = self.samples[index]
         path_ori_image = path.replace('segmentations/', '').replace('.png', '.jpg')
@@ -88,6 +92,7 @@ class SegmentationDataLoader(ImageFolder):
         if self.transform is not None:
             sample = self.transform(sample)
             sample_seg = self.transform(sample_seg)
-        target = torch_Tensor(bounding_box(sample_seg))
-        return sample, target
-
+        if self.bbox:
+            target = torch_Tensor(bounding_box(sample_seg))
+            return sample, target
+        return sample, sample_seg

@@ -28,7 +28,7 @@ if use_cuda:
 else:
     print('Using CPU')
 
-data_transforms = data_transformer_with_segmentation(input_size, bounding_box(), model_path='experiment/bb-v2/model.pth')
+data_transforms = data_transformer_with_segmentation(input_size, bounding_box(), model_path='experiment/bb-v3/model.pth')
 
 test_dir = args.data + '/test_images/mistery_category'
 
@@ -46,8 +46,8 @@ for f in tqdm(os.listdir(test_dir)):
     if 'jpg' in f:
         data = data_transforms(pil_loader(test_dir + '/' + f))
         data = data.view(1, data.size(0), data.size(1), data.size(2))
-        show_images(data, 3, min=0, max=1)
-        plt.show()
+        # show_images(data, 3, min=0, max=1)
+        # plt.show()
         if use_cuda:
             data = data.cuda()
         output = model(data)

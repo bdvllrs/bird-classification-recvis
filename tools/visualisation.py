@@ -32,5 +32,5 @@ def show_bounding_box(bbox, input_size, ax, color='r'):
 def plot_error(k, new_point, fig, ax):
     ax.plot(k, new_point)
     fig.canvas.draw()
-    fig.canvas.flush_events()
+    # fig.canvas.flush_events()
 

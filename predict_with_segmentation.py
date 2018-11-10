@@ -25,7 +25,7 @@ if not os.path.isdir(args.experiment):
 path_to_images = os.path.abspath(os.path.join(os.curdir, 'bird_dataset', 'train_images'))
 
 # Data initialization and loading
-data_transforms = data_transformer_with_segmentation(input_size, bounding_box(), model_path='experiment/bb-v1/model.pth')
+data_transforms = data_transformer_with_segmentation(input_size, bounding_box(), model_path='experiment/bb-v3/model.pth')
 
 train_loader = torch.utils.data.DataLoader(
     datasets.ImageFolder(args.data + '/train_images',
