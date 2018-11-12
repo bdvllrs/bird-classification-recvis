@@ -8,11 +8,12 @@ import torch
 import torch.optim as optim
 
 from models import bounding_box, bbalexnet, unet11
-from tools import Parser, data_transformer, SegmentationDataLoader, JacardLoss
+from tools import Parser, data_transformer, SegmentationDataLoader, JacardLoss, dice_coeff
 from tools.visualisation import show_images, show_bounding_box, plot_error
 
-model, input_size = bounding_box()
-# model, input_size = unet11(pretrained=True)
+# model, input_size = bounding_box()
+model = unet11(pretrained=True)
+input_size = 64, 64
 
 # Training settings
 args = Parser().parse()
@@ -32,11 +33,11 @@ data_transforms_val = data_transformer(input_size)
 train_loader = torch.utils.data.DataLoader(
     # Get the original image and set target as bounding box over segmentation
     SegmentationDataLoader(args.data + '/seg_dataset/segmentations/train_images',
-                           transform=data_transforms_train),
+                           transform=data_transforms_train, bbox=False),
     batch_size=args.batch_size, shuffle=True, num_workers=1)
 val_loader = torch.utils.data.DataLoader(
     SegmentationDataLoader(args.data + '/seg_dataset/segmentations/val_images',
-                           transform=data_transforms_val),
+                           transform=data_transforms_val, bbox=False),
     batch_size=args.batch_size, shuffle=False, num_workers=1)
 
 if use_cuda:
@@ -54,10 +55,10 @@ def train(epoch, fig_error, ax_error):
     for batch_idx, (data, target) in enumerate(train_loader):
         if use_cuda:
             data, target = data.cuda(), target.cuda()
+        target = target[:, 0, :, :]
         optimizer.zero_grad()
         output = model(data)
-        criterion = JacardLoss()
-        loss = criterion(output, target)
+        loss = -dice_coeff(output, target)
         loss.backward()
         error_loss += loss
         optimizer.step()
@@ -65,8 +66,7 @@ def train(epoch, fig_error, ax_error):
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.data.item()))
-
-    plot_error(epoch, error_loss.detach().cpu().numpy()/len(train_loader), fig_error, ax_error)
+    # plot_error(epoch, error_loss.detach().cpu().numpy() / len(train_loader), fig_error, ax_error)
 
 
 def validation(epoch, fig_error, ax_error):
@@ -75,20 +75,20 @@ def validation(epoch, fig_error, ax_error):
     for data, target in val_loader:
         if use_cuda:
             data, target = data.cuda(), target.cuda()
+        target = target[:, 0, :, :]
         output = model(data)
         # if epoch % 2 == 0:
         #     i = np.random.randint(0, len(output))
-        #     fig, ax = plt.subplots(1)
-        #     show_images(data, 3, min=i, max=i + 1, ax=ax)
-        #     show_bounding_box(output[i], input_size, ax, color='r')
-        #     show_bounding_box(target[i], input_size, ax, color='b')
-        #     fig.show()
+        #     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
+        #     show_images(data, 3, min=i, max=i + 1, ax=ax1)
+        #     show_images(target, 3, min=i, max=i + 1, ax=ax2)
+        #     show_images(output, 3, min=i, max=i + 1, ax=ax3)
+        #     plt.show()
         # sum up batch loss
         # criterion = torch.nn.MSELoss(reduction='elementwise_mean')
-        criterion = JacardLoss()
-        validation_loss += criterion(output, target).data.item()
+        validation_loss += dice_coeff(output, target).data.item()
     validation_loss /= len(val_loader)
-    plot_error(epoch, validation_loss, fig_error, ax_error)
+    # plot_error(epoch, validation_loss, fig_error, ax_error)
     print('\nValidation set: Average loss: {})\n'.format(validation_loss))
 
 
@@ -97,8 +97,8 @@ os.mkdir(path)
 fig, (ax1, ax2) = plt.subplots(2, 1)
 ax1.set_title('Training error')
 ax2.set_title('Validation error')
-plt.ion()
-fig.show()
+# plt.ion()
+# fig.show()
 for epoch in range(1, args.epochs + 1):
     train(epoch, fig, ax1)
     validation(epoch, fig, ax2)

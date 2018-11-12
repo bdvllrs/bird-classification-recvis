@@ -2,7 +2,24 @@ from math import floor
 import Augmentor
 import torch
 import torchvision.transforms as transforms
+from torchvision.datasets import ImageFolder
+import torchvision.transforms.functional as F_vision
+from torch.nn import functional as F
+
 from models import bounding_box
+
+
+class Resize(transforms.Resize):
+    def __call__(self, img):
+        width, height = img.size
+        if width > height:
+            size = self.size if type(self.size) == int else self.size[0]
+            size = (size, int(height / width * size))
+        else:
+            size = self.size if type(self.size) == int else self.size[1]
+            size = (int(width / height * size), size)
+        return F_vision.resize(img, size, self.interpolation)
+
 
 # once the images are loaded, how do we pre-process them before being passed into the network
 # by default, we resize the images to 64 x 64 in size
@@ -16,10 +33,29 @@ data_transforms = transforms.Compose([
 ])
 
 
-def data_transformer(size):
+def data_transformer(size, use_crop=False):
+    # def pad_for_square(img):
+    #     width, height = img.size(1), img.size(2)
+    #     if abs(width - height) % 2 == 0:
+    #         pad = abs(width - height) // 2, abs(width - height) // 2
+    #     else:
+    #         pad = abs(width - height) // 2, abs(width - height) // 2 + 1
+    #     if width > height:
+    #         return F.pad(img, pad, 'constant', 0)
+    #     else:
+    #         pad = (0, 0,) + pad
+    #         return F.pad(img, pad, 'constant', 0)
+
+    # Use augmentor to randomly crop the image
+    p = Augmentor.Pipeline()
+    p.crop_by_size(1, size[0], size[1], centre=False)
+
     return transforms.Compose([
+        p.torch_transform() if use_crop else lambda x: x,
+        # Resize(size),
         transforms.Resize(size),
         transforms.ToTensor(),
+        # pad_for_square,
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
@@ -76,3 +112,18 @@ def data_transformer_with_augment(input_size):
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
+
+
+class SegmentationImageLoader(ImageFolder):
+    def __init__(self, root, **params):
+        super(SegmentationImageLoader, self).__init__(root, **params)
+
+    def __getitem__(self, index):
+        path, target = self.samples[index]
+        path_ori_image = path.replace('segmentations/', '').replace('.png', '.jpg')
+        sample = self.loader(path_ori_image)
+        sample_seg = self.loader(path)
+        if self.transform is not None:
+            sample = self.transform(sample)
+            sample_seg = self.transform(sample_seg)
+        return sample, target, sample_seg

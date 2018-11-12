@@ -3,12 +3,12 @@ from datetime import datetime
 import torch
 import torch.optim as optim
 from torchvision import datasets
-from tools import Parser, data_transformer, CNNLayerVisualization, show_images
-from models import simple_cnn, alexnet, resnet101
+from tools import Parser, data_transformer, CNNLayerVisualization, SegmentationImageLoader
+from models import simple_cnn, alexnet, resnet101, unet11
 import matplotlib.pyplot as plt
 
-
 model, input_size = resnet101()
+seg_model = unet11(pretrained=True)
 
 # Training settings
 args = Parser().parse()
@@ -25,12 +25,12 @@ path_to_images = os.path.abspath(os.path.join(os.curdir, 'bird_dataset', 'train_
 data_transforms = data_transformer(input_size)
 
 train_loader = torch.utils.data.DataLoader(
-    datasets.ImageFolder(args.data + '/train_images',
-                         transform=data_transforms),
+    SegmentationImageLoader(args.data + '/segmentations/train_images',
+                            transform=data_transforms),
     batch_size=args.batch_size, shuffle=True, num_workers=1)
 val_loader = torch.utils.data.DataLoader(
-    datasets.ImageFolder(args.data + '/val_images',
-                         transform=data_transforms),
+    SegmentationImageLoader(args.data + '/segmentations/val_images',
+                            transform=data_transforms),
     batch_size=args.batch_size, shuffle=False, num_workers=1)
 
 # Neural network and optimizer
@@ -40,6 +40,7 @@ val_loader = torch.utils.data.DataLoader(
 if use_cuda:
     print('Using GPU')
     model.cuda()
+    seg_model.cuda()
 else:
     print('Using CPU')
 
@@ -48,21 +49,13 @@ optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
 def train(epoch):
     model.train()
-    # cnn_layer = 2
-    # filter_pos = 5
-    # # Fully connected layer is not needed
-    # layer_vis = CNNLayerVisualization(model.layer4, cnn_layer, filter_pos)
-    #
-    # # Layer visualization with pytorch hooks
-    # layer_vis.visualise_layer_with_hooks()
-    # ax1.set_title('Channel 1')
-    # show_images(chan_1, ax=ax1)
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for batch_idx, (data, target, seg_target) in enumerate(train_loader):
         if use_cuda:
-            data, target = data.cuda(), target.cuda()
-        # show_images(data, 3, min=0, max=0 + 1)
-        # plt.show()
+            data, target, seg_target = data.cuda(), target.cuda(), seg_target.cuda()
         optimizer.zero_grad()
+        segmentation = seg_model(data)
+        seg = segmentation.expand_as(data)
+        data.mul_(seg)
         output = model(data)
         criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
         loss = criterion(output, target)
@@ -78,9 +71,12 @@ def validation():
     model.eval()
     validation_loss = 0
     correct = 0
-    for data, target in val_loader:
+    for data, target, seg_target in val_loader:
         if use_cuda:
-            data, target = data.cuda(), target.cuda()
+            data, target, seg_target = data.cuda(), target.cuda(), seg_target.cuda()
+        segmentation = seg_model(data)
+        seg = segmentation.expand_as(data)
+        data.mul_(seg)
         output = model(data)
         # sum up batch loss
         criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
@@ -102,6 +98,8 @@ for epoch in range(1, args.epochs + 1):
     validation()
     model_file = path + '/model.pth'
     torch.save(model.state_dict(), model_file)
+    seg_model_file = path + '/seg_model.pth'
+    torch.save(seg_model.state_dict(), seg_model_file)
     print(
         '\nSaved model to ' + model_file + '. You can run `python evaluate.py --model ' + model_file +
         '` to generate the Kaggle formatted csv file')

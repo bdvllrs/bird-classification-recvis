@@ -45,7 +45,8 @@ def alexnet():
 
 def resnet101():
     model = torch_resnet101(pretrained=True)
-    for param in model.parameters():
+    model_conv = nn.Sequential(*list(model.children())[:-3])
+    for param in model_conv.parameters():
         param.requires_grad = False
     fc_features = model.fc.in_features
     model.fc = nn.Linear(fc_features, nclasses)
