@@ -1,10 +1,11 @@
 import os
 from datetime import datetime
+import numpy as np
 import torch
 import torch.optim as optim
 from torchvision import datasets
-from tools import Parser, data_transformer, CNNLayerVisualization, show_images
-from models import simple_cnn, alexnet, resnet101
+from tools import Parser, data_transformer_with_augment, data_transformer, CNNLayerVisualization, show_images
+from models import simple_cnn, alexnet, vgg16, resnet101
 import matplotlib.pyplot as plt
 
 
@@ -22,11 +23,12 @@ if not os.path.isdir(args.experiment):
 path_to_images = os.path.abspath(os.path.join(os.curdir, 'bird_dataset', 'train_images'))
 
 # Data initialization and loading
+data_transforms_augment = data_transformer_with_augment(input_size)
 data_transforms = data_transformer(input_size)
 
 train_loader = torch.utils.data.DataLoader(
     datasets.ImageFolder(args.data + '/train_images',
-                         transform=data_transforms),
+                         transform=data_transforms_augment),
     batch_size=args.batch_size, shuffle=True, num_workers=1)
 val_loader = torch.utils.data.DataLoader(
     datasets.ImageFolder(args.data + '/val_images',
@@ -62,6 +64,7 @@ def train(epoch):
             data, target = data.cuda(), target.cuda()
         # show_images(data, 3, min=0, max=0 + 1)
         # plt.show()
+        # print(target)
         optimizer.zero_grad()
         output = model(data)
         criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
@@ -74,7 +77,7 @@ def train(epoch):
                        100. * batch_idx / len(train_loader), loss.data.item()))
 
 
-def validation():
+def validation(epoch):
     model.eval()
     validation_loss = 0
     correct = 0
@@ -87,7 +90,12 @@ def validation():
         validation_loss += criterion(output, target).data.item()
         # get the index of the max log-probability
         pred = output.data.max(1, keepdim=True)[1]
-        correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+        valid = pred.eq(target.data.view_as(pred)).cpu()
+        wrong_images = np.argwhere(valid.numpy() == 0)[:, 0]
+        correct += valid.sum()
+        if epoch > 15:
+            show_images(data, 5, indexes=wrong_images)
+            plt.show()
 
     validation_loss /= len(val_loader.dataset)
     print('\nValidation set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
@@ -99,7 +107,7 @@ path = args.experiment + '/' + datetime.today().strftime('%Y-%m-%d %H:%M:%S')
 os.mkdir(path)
 for epoch in range(1, args.epochs + 1):
     train(epoch)
-    validation()
+    validation(epoch)
     model_file = path + '/model.pth'
     torch.save(model.state_dict(), model_file)
     print(

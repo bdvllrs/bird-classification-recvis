@@ -6,12 +6,14 @@ from torchvision import datasets
 from tools import Parser, data_transformer_with_segmentation
 from tools.visualisation import show_images
 from models import bounding_box
-from models import simple_cnn, alexnet, resnet101
+from models import simple_cnn, alexnet, resnet101_wo_softmax, LinearClassifier
 
 import matplotlib.pyplot as plt
 
+embedding_size = 100
 
-model, input_size = resnet101()
+model, input_size = resnet101_wo_softmax(embedding_size)
+classifier = LinearClassifier(2*embedding_size)
 
 # Training settings
 args = Parser().parse()
@@ -25,7 +27,8 @@ if not os.path.isdir(args.experiment):
 path_to_images = os.path.abspath(os.path.join(os.curdir, 'bird_dataset', 'train_images'))
 
 # Data initialization and loading
-data_transforms = data_transformer_with_segmentation(input_size, bounding_box(), model_path='experiment/bb-v3/model.pth')
+data_transforms = data_transformer_with_segmentation(input_size, bounding_box(),
+                                                     model_path='experiment/bb-v4/model.pth')
 
 train_loader = torch.utils.data.DataLoader(
     datasets.ImageFolder(args.data + '/train_images',
@@ -43,6 +46,7 @@ val_loader = torch.utils.data.DataLoader(
 if use_cuda:
     print('Using GPU')
     model.cuda()
+    classifier.cuda()
 else:
     print('Using CPU')
 
@@ -52,12 +56,16 @@ optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 def train(epoch):
     model.train()
     for batch_idx, (data, target) in enumerate(train_loader):
+        data, data_cropped = data[:, 0], data[:, 1]
         if use_cuda:
-            data, target = data.cuda(), target.cuda()
+            data, data_cropped, target = data.cuda(), data_cropped.cuda(), target.cuda()
         # show_images(data, 3, min=0, max=1)
         # plt.show()
         optimizer.zero_grad()
-        output = model(data)
+        emb1 = model(data)
+        emb2 = model(data_cropped)
+        emb = torch.cat((emb1, emb2), dim=-1)
+        output = classifier(emb)
         criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
         loss = criterion(output, target)
         loss.backward()
@@ -73,9 +81,14 @@ def validation():
     validation_loss = 0
     correct = 0
     for data, target in val_loader:
+        data, data_cropped = data[:, 0], data[:, 1]
         if use_cuda:
-            data, target = data.cuda(), target.cuda()
-        output = model(data)
+            data, data_cropped, target = data.cuda(), data_cropped.cuda(), target.cuda()
+        optimizer.zero_grad()
+        emb1 = model(data)
+        emb2 = model(data_cropped)
+        emb = torch.cat((emb1, emb2), dim=-1)
+        output = classifier(emb)
         # sum up batch loss
         criterion = torch.nn.CrossEntropyLoss(reduction='elementwise_mean')
         validation_loss += criterion(output, target).data.item()

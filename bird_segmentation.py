@@ -11,9 +11,9 @@ from models import bounding_box, bbalexnet, unet11
 from tools import Parser, data_transformer, SegmentationDataLoader, JacardLoss, dice_coeff
 from tools.visualisation import show_images, show_bounding_box, plot_error
 
-# model, input_size = bounding_box()
-model = unet11(pretrained=True)
-input_size = 64, 64
+model, input_size = bounding_box()
+# model = unet11(pretrained=True)
+# input_size = 64, 64
 
 # Training settings
 args = Parser().parse()
@@ -33,11 +33,11 @@ data_transforms_val = data_transformer(input_size)
 train_loader = torch.utils.data.DataLoader(
     # Get the original image and set target as bounding box over segmentation
     SegmentationDataLoader(args.data + '/seg_dataset/segmentations/train_images',
-                           transform=data_transforms_train, bbox=False),
+                           transform=data_transforms_train, bbox=True),
     batch_size=args.batch_size, shuffle=True, num_workers=1)
 val_loader = torch.utils.data.DataLoader(
     SegmentationDataLoader(args.data + '/seg_dataset/segmentations/val_images',
-                           transform=data_transforms_val, bbox=False),
+                           transform=data_transforms_val, bbox=True),
     batch_size=args.batch_size, shuffle=False, num_workers=1)
 
 if use_cuda:
@@ -51,45 +51,45 @@ optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
 
 def train(epoch, fig_error, ax_error):
     model.train()
-    error_loss = 0
     for batch_idx, (data, target) in enumerate(train_loader):
         if use_cuda:
             data, target = data.cuda(), target.cuda()
-        target = target[:, 0, :, :]
         optimizer.zero_grad()
         output = model(data)
-        loss = -dice_coeff(output, target)
+        criterion = JacardLoss()
+        loss = criterion(output, target)
         loss.backward()
-        error_loss += loss
         optimizer.step()
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss.data.item()))
-    # plot_error(epoch, error_loss.detach().cpu().numpy() / len(train_loader), fig_error, ax_error)
 
 
 def validation(epoch, fig_error, ax_error):
     model.eval()
     validation_loss = 0
+    k = 0
     for data, target in val_loader:
         if use_cuda:
             data, target = data.cuda(), target.cuda()
-        target = target[:, 0, :, :]
         output = model(data)
-        # if epoch % 2 == 0:
-        #     i = np.random.randint(0, len(output))
-        #     fig, (ax1, ax2, ax3) = plt.subplots(1, 3)
-        #     show_images(data, 3, min=i, max=i + 1, ax=ax1)
-        #     show_images(target, 3, min=i, max=i + 1, ax=ax2)
-        #     show_images(output, 3, min=i, max=i + 1, ax=ax3)
-        #     plt.show()
+        if epoch > 5 == 0:
+            i = np.random.randint(0, len(output))
+            fig, ax = plt.subplots(1)
+            show_images(data, 3, min=i, max=i + 1, ax=ax)
+            show_bounding_box(output[i], input_size, ax, color='r')
+            show_bounding_box(target[i], input_size, ax, color='b')
+            fig.show()
         # sum up batch loss
         # criterion = torch.nn.MSELoss(reduction='elementwise_mean')
-        validation_loss += dice_coeff(output, target).data.item()
-    validation_loss /= len(val_loader)
-    # plot_error(epoch, validation_loss, fig_error, ax_error)
-    print('\nValidation set: Average loss: {})\n'.format(validation_loss))
+        criterion = JacardLoss()
+        validation_loss += criterion(output, target).data.item()
+        k += 1
+
+    validation_loss /= k
+    print('\nValidation set: Average loss: {})\n'.format(
+        validation_loss))
 
 
 path = args.experiment + '/' + datetime.today().strftime('%Y-%m-%d %H:%M:%S')

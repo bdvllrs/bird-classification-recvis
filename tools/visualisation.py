@@ -4,8 +4,10 @@ import matplotlib.patches as patches
 import torchvision
 
 
-def show_images(imgs, nrow=8, min=0, max=-1, ax=None):
+def show_images(imgs, nrow=8, min=0, max=-1, ax=None, indexes=None):
     # Scale between [0, 1]
+    if indexes is not None:
+        imgs = imgs[indexes]
     imgs = imgs[min:max]
     imgs = (imgs - imgs.min().expand(imgs.size())) / (imgs.max() - imgs.min()).expand(imgs.size())
     # Convert to numpy image

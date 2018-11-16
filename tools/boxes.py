@@ -16,6 +16,8 @@ def intersect_bbox(box_a, box_b):
     Return:
       (tensor) intersection area, Shape: [A,B].
     """
+    # print(box_a.size())
+    # print(box_b.size())
     left_x_a = torch.min(box_a[:, 0], box_a[:, 1])
     right_x_a = torch.max(box_a[:, 0], box_a[:, 1])
     left_y_a = torch.min(box_a[:, 2], box_a[:, 3])
@@ -111,30 +113,74 @@ def bounding_box(img):
     """
     if type(img) == torch_Tensor:
         img = img.numpy()
-    img = img[0, :, :] - np.expand_dims(img[0, 0, 0], 1)  # remove the top left pixel and set it as background
-    rows = np.any(img, axis=1)
-    cols = np.any(img, axis=0)
-    rmin, rmax = np.where(rows)[0][[0, -1]]
-    cmin, cmax = np.where(cols)[0][[0, -1]]
+    try:
+        img = img[0, :, :] - np.expand_dims(img[0, 0, 0], 1)  # remove the top left pixel and set it as background
+        rows = np.any(img, axis=1)
+        cols = np.any(img, axis=0)
+        rmin, rmax = np.where(rows)[0][[0, -1]]
+        cmin, cmax = np.where(cols)[0][[0, -1]]
 
-    return rmin / len(img), rmax / len(img), cmin / len(img[0]), cmax / len(img[0])
+        return rmin / len(img), rmax / len(img), cmin / len(img[0]), cmax / len(img[0])
+    except:
+        return None
+
+
+def bbox_area(bbox):
+    return (bbox[1] - bbox[0]) * (bbox[3] - bbox[2])
+
+
+def grids(size, width, height):
+    """
+    Returns all possible boxes of the image
+    Args:
+        size: size of the boxes
+        width: width of the image
+        height: height of the image
+    """
+    boxes = []
+    for x in range(0, width-size, size):
+        for y in range(0, height-size, size):
+            boxes.append((x, x+size, y, y+size))
+    for y in range(0, height-size, size):
+        boxes.append((width-size, width, y, y+size))
+    for x in range(0, width-size, size):
+        boxes.append((x, x+size, height-size, height))
+    return boxes
+
+
+def random_box(size, width, height):
+    x, y = int(np.random.rand() * (width - size)), int(np.random.rand() * (height - size))
+    return x, x + size, y, y + size
 
 
 class SegmentationDataLoader(ImageFolder):
-    def __init__(self, root, bbox=True, **params):
+    def __init__(self, root, bbox=True, sliding_windows=False, validation=False, **params):
         super(SegmentationDataLoader, self).__init__(root, **params)
+        self.sliding_windows = sliding_windows
         self.bbox = bbox
+        self.validation = validation
 
     def __getitem__(self, index):
         path, target = self.samples[index]
         path_ori_image = path.replace('segmentations/', '').replace('.png', '.jpg')
         sample = self.loader(path_ori_image)
         sample_seg = self.loader(path)
+        if self.sliding_windows and not self.validation:
+            crop_box = random_box(self.sliding_windows, sample.size[0], sample.size[1])
+            sample_seg = sample_seg.crop((crop_box[0], crop_box[2], crop_box[1], crop_box[3]))
+            sample = sample.crop((crop_box[0], crop_box[2], crop_box[1], crop_box[3]))
+
         if self.transform is not None:
             sample = self.transform(sample)
             sample_seg = self.transform(sample_seg)
-        if self.bbox:
+        if self.sliding_windows:
+            if not self.validation:
+                bbox = bounding_box(sample_seg)
+                target = target if bbox is not None else 20  # Background if not bird
+                if bbox is not None and bbox_area(bbox) < 0.1:  # If less than 10% of area is bird, it's background
+                    target = 20
+            return sample_seg, sample, target
+        elif self.bbox:
             target = torch_Tensor(bounding_box(sample_seg))
-            print(target)
             return sample, target
         return sample, sample_seg

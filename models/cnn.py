@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch.nn.functional as F
-from torchvision.models import alexnet as torch_alexnet, resnet101 as torch_resnet101
+from torchvision.models import alexnet as torch_alexnet, resnet101 as torch_resnet101, vgg16 as torch_vgg16
 
 nclasses = 20
 
@@ -43,12 +43,41 @@ def alexnet():
     return model, (227, 227)
 
 
-def resnet101():
+def resnet101(nclass=None):
     model = torch_resnet101(pretrained=True)
     model_conv = nn.Sequential(*list(model.children())[:-3])
     for param in model_conv.parameters():
         param.requires_grad = False
     fc_features = model.fc.in_features
-    model.fc = nn.Linear(fc_features, nclasses)
+    model.fc = nn.Sequential(
+        nn.Linear(fc_features, nclass if nclass is not None else nclasses),
+        nn.Softmax(dim=-1)
+    )
     return model, (224, 224)
 
+
+def vgg16(nclass=None):
+    model = torch_vgg16(pretrained=True)
+    model_conv = nn.Sequential(*list(model.children())[:-1])
+    for param in model_conv.parameters():
+        param.requires_grad = False
+    model.classifier = nn.Sequential(
+        nn.Linear(512 * 7 * 7, 4096),
+        nn.ReLU(True),
+        nn.Dropout(),
+        nn.Linear(4096, 4096),
+        nn.ReLU(True),
+        nn.Dropout(),
+        nn.Linear(4096, nclass if nclass is not None else nclasses),
+    )
+    return model, (224, 224)
+
+
+def resnet101_wo_softmax(nclass=None):
+    model = torch_resnet101(pretrained=True)
+    model_conv = nn.Sequential(*list(model.children())[:-3])
+    for param in model_conv.parameters():
+        param.requires_grad = False
+    fc_features = model.fc.in_features
+    model.fc = nn.Linear(fc_features, nclass if nclass is not None else nclasses)
+    return model, (224, 224)
